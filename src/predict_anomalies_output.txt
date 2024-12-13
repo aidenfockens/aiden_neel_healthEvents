@@ -1,0 +1,27 @@
+:: loading settings :: url = jar:file:/Users/aidenfockens/.pyenv/versions/3.10.8/lib/python3.10/site-packages/pyspark/jars/ivy-2.5.1.jar!/org/apache/ivy/core/settings/ivysettings.xml
+Number of anomalies detected: 835
+Number of non-anomalies detected: 4165
+Examples of anomalies:
++------------------+-------------------+-----------+--------+---------------------------------------------+
+|EventType         |Timestamp          |Location   |Severity|Details                                      |
++------------------+-------------------+-----------+--------+---------------------------------------------+
+|hospital_admission|2024-11-24 19:52:43|Berlin     |medium  |This is a simulated hospital_admission event.|
+|hospital_admission|2024-11-24 19:53:44|London     |high    |This is a simulated hospital_admission event.|
+|hospital_admission|2024-11-24 19:53:51|Los Angeles|medium  |This is a simulated hospital_admission event.|
+|hospital_admission|2024-11-24 19:54:14|London     |high    |This is a simulated hospital_admission event.|
+|hospital_admission|2024-11-24 19:55:00|Paris      |high    |This is a simulated hospital_admission event.|
++------------------+-------------------+-----------+--------+---------------------------------------------+
+only showing top 5 rows
+
+Examples of non-anomalies:
++---------------------+-------------------+-----------+--------+------------------------------------------------+
+|EventType            |Timestamp          |Location   |Severity|Details                                         |
++---------------------+-------------------+-----------+--------+------------------------------------------------+
+|general_health_report|2024-11-24 19:51:53|Boston     |medium  |This is a simulated general_health_report event.|
+|health_mention       |2024-11-24 19:52:05|Berlin     |low     |This is a simulated health_mention event.       |
+|vaccination          |2024-11-24 19:52:24|Los Angeles|medium  |This is a simulated vaccination event.          |
+|vaccination          |2024-11-24 19:53:02|Los Angeles|medium  |This is a simulated vaccination event.          |
+|emergency_incident   |2024-11-24 19:53:15|Paris      |high    |This is a simulated emergency_incident event.   |
++---------------------+-------------------+-----------+--------+------------------------------------------------+
+only showing top 5 rows
+

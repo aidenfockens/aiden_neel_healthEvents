@@ -35,8 +35,6 @@ consumer = KafkaConsumer(
     group_id=CONSUMER_GROUP         # Use a consistent consumer group ID
 )
 
-import time
-from datetime import datetime
 
 def update_db():
     session = Session()
@@ -92,72 +90,35 @@ def count_and_print_entries():
     finally:
         session.close()
 
+
+
+def get_earliest_event_date():
+    session = Session()
+    try:
+        # Query the minimum Timestamp
+        earliest_date = session.query(Event).order_by(Event.Timestamp.asc()).first()
+        if earliest_date:
+            print(f"The earliest event date is: {earliest_date.Timestamp}")
+            return earliest_date.Timestamp
+        else:
+            print("No events found in the database.")
+            return None
+    except Exception as e:
+        print(f"Error occurred while querying the earliest date: {e}")
+        return None
+    finally:
+        session.close()
+
+
+
+
+
+
 if __name__ == '__main__':  
     #Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)  # Create tables with updated schema
     Session = sessionmaker(bind=engine)
     update_db()
-    count_and_print_entries()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # Read all events from the table
-# def read_events():
-#     session = Session()
-#     try:
-#         events = session.query(Event).all()
-#         for event in events:
-#             print(f"ID: {event.id}, Location: {event.Location}, Severity: {event.Severity}, "
-#                   f"EventType: {event.EventType}, Details: {event.Details}, Timestamp: {event.Timestamp}")
-#     except Exception as e:
-#         print(f"Error reading events: {e}")
-#     finally:
-#         session.close()
-
-# # Delete all events from the table
-# def delete_all_events():
-#     session = Session()
-#     try:
-#         num_deleted = session.query(Event).delete()
-#         session.commit()
-#         print(f"Deleted {num_deleted} events from the table.")
-#     except Exception as e:
-#         session.rollback()
-#         print(f"Error deleting events: {e}")
-#     finally:
-#         session.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    #count_and_print_entries()
 
 

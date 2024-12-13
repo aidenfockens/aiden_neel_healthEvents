@@ -34,7 +34,7 @@ class Event(db.Model):
     Timestamp = Column(DateTime, nullable=False)
 
 # Constants for form options
-LOCATIONS = ["London", "New York", "Paris", "Boston", "Los Angeles", "Berlin"]
+LOCATIONS = ["World", "London", "New York", "Paris", "Boston", "Los Angeles", "Berlin"]
 SEVERITIES = ["high", "medium", "low"]
 EVENTTYPES = ["hospital_admission", "general_health_report", "health_mention", "emergency_incident", "routine_checkup", "vaccination"]
 
@@ -48,9 +48,6 @@ def get_events():
     location = request.form.get("location")
     time_frame = request.form.get("time_frame")
 
-    if location not in LOCATIONS:
-        return jsonify({"error": "Invalid location"}), 400
-
     now = datetime.now()
     if time_frame == "week":
         start_time = now - timedelta(weeks=1)
@@ -58,15 +55,17 @@ def get_events():
         start_time = now - timedelta(days=30)
     elif time_frame == "year":
         start_time = now - timedelta(days=365)
-    elif time_frame == "decade":
-        start_time = now - timedelta(days=365 * 10)
     else:
         return jsonify({"error": "Invalid time frame"}), 400
 
-    # Query database
-    print("starting to query database")
-    events = Event.query.filter(Event.Location == location, Event.Timestamp >= start_time).all()
-    print("success!")
+    if location == "World":
+        # Include all locations
+        events = Event.query.filter(Event.Timestamp >= start_time).all()
+    elif location in LOCATIONS:
+        events = Event.query.filter(Event.Location == location, Event.Timestamp >= start_time).all()
+    else:
+        return jsonify({"error": "Invalid location"}), 400
+
     if not events:
         return jsonify({"error": "No events found for the given criteria"}), 404
 
@@ -74,6 +73,7 @@ def get_events():
     data = aggregate_data(events, time_frame)
     graph = generate_graph(data, time_frame)
     return graph
+
 
 def aggregate_data(events, time_frame):
     data = {"severity": {}, "event_type": {}}
@@ -90,7 +90,7 @@ def aggregate_data(events, time_frame):
     if time_frame == "week":
         bucket_key = lambda event: event.Timestamp.date()
     elif time_frame == "month":
-        bucket_key = lambda event: event.Timestamp.isocalendar()[1]
+       bucket_key = lambda event: (event.Timestamp - timedelta(days=event.Timestamp.weekday())).date()
     elif time_frame == "year":
         bucket_key = lambda event: event.Timestamp.month
     elif time_frame == "decade":
@@ -121,7 +121,7 @@ def generate_graph(data, time_frame):
     if time_frame == "week":
         x_labels = [key.strftime('%Y-%m-%d') for key in data.keys()]
     elif time_frame == "month":
-        x_labels = [f"Week {key}" for key in data.keys()]
+        x_labels = [f"{key} - {key + timedelta(days=6)}" for key in sorted(data.keys())]
     elif time_frame == "year":
         x_labels = [f"Month {key}" for key in data.keys()]
     elif time_frame == "decade":
