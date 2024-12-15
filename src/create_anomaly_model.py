@@ -11,6 +11,7 @@ spark = SparkSession.builder.appName("HealthRiskPrediction").getOrCreate()
 data_path = "../health_events_dataset.csv"
 df = spark.read.csv(data_path, header=True, inferSchema=True)
 large_df = spark.read.csv("../1m_health_events_dataset.csv", header=True,inferSchema=True)
+#ADD DIFFERENT FILTER TO CHANGE DATA-SET
 large_df = large_df.filter(large_df.Location == "London").limit(1)
 df = df.union(large_df)
 
