@@ -2,10 +2,9 @@
 FROM python:3.10-slim
 
 # Install necessary system packages
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99disable-check-valid-until && \
+    cat /etc/apt/apt.conf.d/99disable-check-valid-until && \
+    apt-get update && apt-get install -y libpq-dev gcc
 
 # Set working directory
 WORKDIR /app

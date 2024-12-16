@@ -1,0 +1,23 @@
+steps:
+# Authenticate kubectl with GKE
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: bash
+  args:
+  - -c
+  - |
+    gcloud container clusters get-credentials flask-kafka-cluster --region us-central1 --project cloud-computing-435215
+
+# Apply Kubernetes manifests
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  args:
+  - kubectl
+  - apply
+  - -f
+  - kubernetes/
+
+# Verify Deployment
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  args:
+  - kubectl
+  - get
+  - all
