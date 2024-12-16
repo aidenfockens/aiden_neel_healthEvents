@@ -8,9 +8,9 @@ The data is updated every 4 hours through a Cronjob that reads from the Kafka st
 Both the web app and Cronjob are hosted on the Google Cloud. 
 
 I ran my code by:
-  --building the images to my container registry on the google cloud: 
+  --building the images (flask app, kafka-streaming-app) to my container registry on the google cloud: 
     - docker build -t gcr.io/<your-project-id>/<name-of-container> .
-    - docker push gcr.io/<your-project-id>/<name-of-container>
+    - docker push gcr.io/<your-project-id>/<name-of-container> .
 
  --creating a kubernetes cluster 
     - gcloud container clusters create-auto flask-kafka-cluster \
