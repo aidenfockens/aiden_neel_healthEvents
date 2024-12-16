@@ -9,9 +9,9 @@ from flask_cors import CORS
 from pyspark.sql import SparkSession
 from pyspark.ml.classification import RandomForestClassificationModel
 from pyspark.ml.feature import StringIndexerModel, VectorAssembler
-import matplotlib
+from plotly.graph_objs import Bar, Layout, Figure
 from pyspark.sql.functions import unix_timestamp, month, col, when
-matplotlib.use('Agg')
+
 
 app = Flask(__name__)
 load_dotenv()
@@ -42,10 +42,10 @@ EVENTTYPES = ["hospital_admission", "general_health_report", "health_mention", "
 
 
 
-spark = SparkSession.builder.appName("AnomalyDetectionApp").getOrCreate()
-model_path = "/Users/aidenfockens/Documents/DataEngineering-work/aiden_neel_healthEvents/src/"
+spark = SparkSession.builder.appName("AnomalyDetectionApp").config("spark.driver.memory", "1g").config("spark.executor.memory", "512m").getOrCreate()
+model_path = "./src/"
 rf_model = RandomForestClassificationModel.load(model_path+"rf_model_health_risk")
-event_type_indexer = StringIndexerModel.load(model_path+"EventType_Indexer")
+event_type_indexer = StringIndexerModel.load(model_path+"EventType_indexer")
 location_indexer = StringIndexerModel.load(model_path+"Location_indexer")
 
 
@@ -127,7 +127,7 @@ def detect_anomalies(events):
 
 
 def aggregate_data(events, time_frame):
-    data = {"severity": {}, "event_type": {}, "anomalies": 0}
+    data = {"severity": {}, "event_type": {}, "anomalies": 0, "total_events": 0}
 
     for severity in SEVERITIES:
         data["severity"][severity] = 0
@@ -137,6 +137,7 @@ def aggregate_data(events, time_frame):
     for event in events:
         data["severity"][event.Severity] += 1
         data["event_type"][event.EventType] += 1
+        data["total_events"] += 1
         if event.Anomaly:
             data["anomalies"] += 1
 
@@ -153,7 +154,7 @@ def aggregate_data(events, time_frame):
     for event in events:
         key = bucket_key(event)
         if key not in buckets:
-            buckets[key] = {"severity": {}, "event_type": {}, "anomalies": 0}
+            buckets[key] = {"severity": {}, "event_type": {}, "anomalies": 0, "total_events": 0}
             for severity in SEVERITIES:
                 buckets[key]["severity"][severity] = 0
             for event_type in EVENTTYPES:
@@ -161,125 +162,144 @@ def aggregate_data(events, time_frame):
 
         buckets[key]["severity"][event.Severity] += 1
         buckets[key]["event_type"][event.EventType] += 1
+        buckets[key]["total_events"] += 1
         if event.Anomaly:
             buckets[key]["anomalies"] += 1
-    print(buckets)
+
     return buckets
 
+
 def generate_graph(data, time_frame):
-    import matplotlib.pyplot as plt
-    from io import BytesIO
+    from plotly.graph_objs import Bar, Layout, Figure
     from flask import send_file
+    from io import BytesIO
 
-    plt.figure(figsize=(12, 8))
-
+    # Prepare x-axis labels based on time_frame
     if time_frame == "week":
         x_labels = [key.strftime('%Y-%m-%d') for key in data.keys()]
     elif time_frame == "month":
         x_labels = [f"{key} - {key + timedelta(days=6)}" for key in sorted(data.keys())]
     elif time_frame == "year":
         x_labels = [f"Month {key}" for key in data.keys()]
+    elif time_frame == "decade":
+        x_labels = [f"Year {key}" for key in data.keys()]
+    else:
+        x_labels = []
 
-    gap = .3  # Adjust this value for wider/narrower spacing
-    x_indices = [i * (1 + gap) for i in range(len(x_labels))]
-
-
-    # Extract severity and event type data
+    # Extract severity, event type, anomaly, and total data
     severity_data = {severity: [bucket["severity"].get(severity, 0) for bucket in data.values()] for severity in SEVERITIES}
     event_type_data = {event_type: [bucket["event_type"].get(event_type, 0) for bucket in data.values()] for event_type in EVENTTYPES}
-
-    # Extract anomaly data
     anomaly_data = [bucket["anomalies"] for bucket in data.values()]
+    total_events_data = [bucket["total_events"] for bucket in data.values()]
 
-    # Colors for severity levels
-    severity_colors = {
-        "high": "red",
-        "medium": "orange",
-        "low": "green"
-    }
-
-    # Colors for event types (using a colormap for distinct colors and applying alpha for faded effect)
-    event_type_colors = plt.cm.tab10(range(len(EVENTTYPES)))
-    faded_alpha = 0.5
-
-    # Offset settings for bars
-    severity_offset = -0.3  # Shift severity bars slightly left
-    event_type_offset = 0.3  # Shift event type bars slightly right
-    anomaly_offset = 0.0    # Center anomaly bars
-    bar_width = 0.3
-
-    # Plot severity bars
-    severity_bottom = [0] * len(x_indices)
-    for severity, counts in severity_data.items():
-        color = severity_colors.get(severity, "gray")  # Default to gray if not specified
-        plt.bar(
-            [x + severity_offset for x in x_indices],
-            counts,
-            width=bar_width,
-            bottom=severity_bottom,
-            color=color,
-            label=f"{severity.capitalize()} (Severity)"
+    # Prepare traces for severity
+    severity_traces = [
+        Bar(
+            x=x_labels,
+            y=counts,
+            name=f"Severity: {severity.capitalize()}",
+            visible=False,  # Initially hidden
+            marker=dict(color=color)
         )
-        # Update bottom for stacking
-        severity_bottom = [sum(x) for x in zip(severity_bottom, counts)]
+        for severity, counts, color in zip(SEVERITIES, severity_data.values(), ["red", "orange", "green"])
+    ]
 
-    # Plot event type bars
-    event_type_bottom = [0] * len(x_indices)
-    for i, (event_type, counts) in enumerate(event_type_data.items()):
-        color = event_type_colors[i]
-        plt.bar(
-            [x + event_type_offset for x in x_indices],
-            counts,
-            width=bar_width,
-            bottom=event_type_bottom,
-            color=color,
-            label=f"{event_type.capitalize()} (Event Type)",
-            alpha=faded_alpha  # Apply faded effect
+    # Prepare traces for event types
+    event_type_traces = [
+        Bar(
+            x=x_labels,
+            y=counts,
+            name=f"Event Type: {event_type.capitalize()}",
+            visible=False,  # Initially hidden
         )
-        # Update bottom for stacking
-        event_type_bottom = [sum(x) for x in zip(event_type_bottom, counts)]
+        for event_type, counts in event_type_data.items()
+    ]
 
-    # Plot anomaly bars
-    plt.bar(
-        [x + anomaly_offset for x in x_indices],
-        anomaly_data,
-        width=bar_width,
-        color="purple",
-        label="Anomalies"
+    # Prepare trace for anomalies
+    anomaly_trace = Bar(
+        x=x_labels,
+        y=anomaly_data,
+        name="Anomalies",
+        visible=False,  # Initially hidden
+        marker=dict(color="purple")
     )
 
-    # Custom Legend
-    severity_legend = [
-        plt.Line2D([0], [0], color="red", lw=4, label="High (Severity)"),
-        plt.Line2D([0], [0], color="orange", lw=4, label="Medium (Severity)"),
-        plt.Line2D([0], [0], color="green", lw=4, label="Low (Severity)")
-    ]
-    event_type_legend = [
-        plt.Line2D([0], [0], color=event_type_colors[i], lw=4, alpha=faded_alpha, label=f"{event_type.capitalize()} (Event Type)")
-        for i, event_type in enumerate(EVENTTYPES)
-    ]
-    anomaly_legend = [
-        plt.Line2D([0], [0], color="purple", lw=4, label="Anomalies")
-    ]
-
-    # Add legend with a short title
-    plt.legend(
-        handles=severity_legend + event_type_legend + anomaly_legend,
-        loc="upper left",
-        bbox_to_anchor=(1, 1),
-        title="Legend"
+    # Prepare trace for total events (default visible)
+    total_events_trace = Bar(
+        x=x_labels,
+        y=total_events_data,
+        name="Total Events",
+        visible=True,  # Default visible
+        marker=dict(color="blue")
     )
 
-    plt.xticks(x_indices, x_labels, rotation=45, ha="right")
-    plt.xlabel("Time Buckets")
-    plt.ylabel("Counts")
-    plt.title(f"Events in {request.form.get('location')} ({time_frame.capitalize()})")
+    # Combine all traces
+    all_traces = [total_events_trace] + severity_traces + event_type_traces + [anomaly_trace]
 
+    # Create layout with checkboxes
+    layout = Layout(
+        title="Total Events",
+        xaxis=dict(title="Dates"),
+        yaxis=dict(title="Counts"),
+        barmode="stack",  # Stacked bars
+        updatemenus=[
+            dict(
+                type="buttons",  # Use buttons for checkboxes
+                direction="right",
+                showactive=True,
+                x=0.5,
+                y=1.15,
+                buttons=[
+                    dict(
+                        label="Total Events",
+                        method="update",
+                        args=[
+                            {"visible": [True] + [False] * (len(all_traces) - 1)},
+                            {"title": "Total Events"}
+                        ],
+                    ),
+                    dict(
+                        label="Severities",
+                        method="update",
+                        args=[
+                            {"visible": [False] + [True] * len(SEVERITIES) + [False] * (len(EVENTTYPES) + 1)},
+                            {"title": "Severities"}
+                        ],
+                    ),
+                    dict(
+                        label="Event Types",
+                        method="update",
+                        args=[
+                            {"visible": [False] * (1 + len(SEVERITIES)) + [True] * len(EVENTTYPES) + [False]},
+                            {"title": "Event Types"}
+                        ],
+                    ),
+                    dict(
+                        label="Anomalies",
+                        method="update",
+                        args=[
+                            {"visible": [False] * (1 + len(SEVERITIES) + len(EVENTTYPES)) + [True]},
+                            {"title": "Anomalies"}
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    # Create figure
+    fig = Figure(data=all_traces, layout=layout)
+
+    # Save graph to buffer and send it as a response
     buffer = BytesIO()
-    plt.savefig(buffer, format="png", bbox_inches="tight")
+    html_str = fig.to_html(full_html=False, include_plotlyjs="cdn")  # Generate HTML
+    buffer.write(html_str.encode("utf-8"))  # Write the HTML string as bytes
     buffer.seek(0)
-    plt.close()
-    return send_file(buffer, mimetype='image/png')
+    return send_file(buffer, mimetype="text/html")
+
+
+
+
 
 
 
@@ -288,4 +308,4 @@ def generate_graph(data, time_frame):
 
 # Run Flask app
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host="0.0.0.0", port=5001)
