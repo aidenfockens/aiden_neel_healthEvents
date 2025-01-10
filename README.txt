@@ -1,6 +1,6 @@
 Hello! This is Aiden and Neels final project.
 
-Access our web app:
+Access our web app: (my google account ran out of money, so this is not currently up)
 http://34.56.51.151:30001
 
 
